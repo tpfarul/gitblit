@@ -113,6 +113,8 @@ public class RepositoryManager implements IRepositoryManager {
 
 	private final Map<String, RepositoryModel> repositoryListCache = new ConcurrentHashMap<String, RepositoryModel>();
 
+	private final Map<String, ForkModel> forkNetworkCache = new ConcurrentHashMap<String, ForkModel>();
+
 	private final AtomicReference<String> repositoryListSettingsChecksum = new AtomicReference<String>("");
 
 	private final IStoredSettings settings;
@@ -490,6 +492,7 @@ public class RepositoryManager implements IRepositoryManager {
 		repositoryListCache.clear();
 		repositorySizeCache.clear();
 		repositoryMetricsCache.clear();
+		forkNetworkCache.clear();
 		CommitCache.instance().clear();
 	}
 
@@ -1124,13 +1127,17 @@ public class RepositoryManager implements IRepositoryManager {
 					return null;
 				}
 			}
-			ForkModel root = getForkModelFromCache(model.name);
-			return root;
+
+			// check for a cached fork network structure
+			String key = getRepositoryKey(model.name);
+			ForkModel cached = forkNetworkCache.get(key);
+			if (cached != null) {
+				return cached;
+			}
 		} else {
 			// find the root, non-cached
 			RepositoryModel model = getRepositoryModel(repository.toLowerCase());
 			while (model.originRepository != null) {
-				model = getRepositoryModel(model.originRepository);
 			}
 			ForkModel root = getForkModel(model.name);
 			return root;
@@ -1140,14 +1147,12 @@ public class RepositoryManager implements IRepositoryManager {
 	private ForkModel getForkModelFromCache(String repository) {
 		String key = getRepositoryKey(repository);
 		RepositoryModel model = repositoryListCache.get(key);
-		if (model == null) {
-			return null;
-		}
-		ForkModel fork = new ForkModel(model);
-		if (!ArrayUtils.isEmpty(model.forks)) {
-			for (String aFork : model.forks) {
-				ForkModel fm = getForkModelFromCache(aFork);
-				if (fm != null) {
+		if (model != null) {
+			ForkModel fork = new ForkModel(model);
+			if (!ArrayUtils.isEmpty(model.forks)) {
+				for (String aFork : model.forks) {
+					ForkModel fm = getForkModelFromCache(aFork);
+					// no need for null check, already cached.
 					fork.forks.add(fm);
 				}
 			}
